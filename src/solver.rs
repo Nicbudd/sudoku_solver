@@ -17,6 +17,17 @@ fn pretty_print_bitmask(bits: u128) -> String {
     )
 }
 
+fn get_set_indexes(set: u128) -> Vec<u8> {
+    let mut v = vec![];
+    for i in 0..81 {
+        if (set >> i) % 2 != 0 {
+            v.push(i)
+        }
+    }
+
+    v
+}
+
 
 
 #[derive(Clone)]
@@ -24,11 +35,13 @@ pub struct Board {
     pub candidates: [u128; 9],
     cell_complete: u128,
     rules: Rules,
+    rubiks_sets: Option<[u128; 6]> 
 }
 
 #[derive(Clone)]
 pub struct Rules {
     pub normal_sudoku: bool,
+    pub rubiks: bool,
     pub sets: Vec<u128>
 }
 
@@ -178,11 +191,31 @@ impl Board {
         //println!("idx{}: {:#011b}", index, self.get_candidates(index));
 
         //dbg!(&self);
+
+        let mut code = "\x1b[0;40m";
+
+        if self.rubiks_sets.is_some() {
+            for (i, set) in self.rubiks_sets.unwrap().iter().enumerate() {
+                if (1 << index) & set != 0 {
+                    code = match i {
+                        0 => {"\x1b[41m"},
+                        1 => {"\x1b[48;5;166m"},
+                        2 => {"\x1b[48;5;214m\x1b[30m"},
+                        3 => {"\x1b[42m"},
+                        4 => {"\x1b[44m"},
+                        5 => {"\x1b[47m\x1b[30m"},
+                        _ => {unreachable!("more than 6 rubiks cube colors")}
+                    }
+                }
+            }
+        }
+
+
     
 
         if self.is_complete(index) {
 
-            format!("{}", BIG_CHAR[*self.candidates_vec(index).first().unwrap()][line])
+            format!("{}{}\x1b[0m", code, BIG_CHAR[*self.candidates_vec(index).first().unwrap()][line])
 
 
         } else {
@@ -197,8 +230,9 @@ impl Board {
             let g = if d == 0 {' '} else {char::from_digit(d as u32, 10).unwrap()};
             let h = if e == 0 {' '} else {char::from_digit(e as u32, 10).unwrap()};
             let i = if f == 0 {' '} else {char::from_digit(f as u32, 10).unwrap()};
-            
-            return format!(" {} {} {} ", g,h,i);
+
+
+            return format!("{} {} {} {} \x1b[0m", code,g,h,i);
         }
     }
 
@@ -222,7 +256,12 @@ impl Board {
 
     pub fn new(rules: Rules) -> Board {
 
-        let mut brd = Board { candidates: [0x000000000001FFFFFFFFFFFFFFFFFFFF; 9], cell_complete: 0, rules: rules.clone()};
+        let mut brd = Board { 
+            candidates: [0x000000000001FFFFFFFFFFFFFFFFFFFF; 9], 
+            cell_complete: 0, 
+            rules: rules.clone(),
+            rubiks_sets: None,
+        };
 
         if brd.rules.normal_sudoku {
 
@@ -274,13 +313,15 @@ impl Board {
     pub fn from_file(file_path: &Path, rules: Rules) -> Result<Board> {
         let mut s = fs::read_to_string(file_path)?;
 
-        let b = Board::from_string(s, rules);
+        let mut b = Board::from_string(s, rules);
+
+        b.update_cell_complete();
 
         Ok(b)
 
     }
 
-    fn from_string(s: String, rules: Rules) -> Board {
+    pub fn from_string(s: String, rules: Rules) -> Board {
 
         let mut b = Board::new(rules);
 
@@ -289,34 +330,67 @@ impl Board {
 
         let mut idx = 0;
 
+        let mut r_set: u128 = 0;
+        let mut o_set: u128 = 0;
+        let mut y_set: u128 = 0;
+        let mut g_set: u128 = 0;
+        let mut b_set: u128 = 0;
+        let mut w_set: u128 = 0;
+
         for ch in s.chars() {
             if idx >= 81 {
-                break;
-            }
-
-            //println!("\"{}\"", ch);
-
-            match ch {
-                '-' | '0' | '*' | '.' | '_' => {
-                    for c in b.candidates.iter_mut() {
-                        *c |= 1 << idx;
+                if b.rules.rubiks {
+                    match ch {
+                        'R' => {r_set |= 1 << (idx - 81);}
+                        'O' => {o_set |= 1 << (idx - 81);}
+                        'Y' => {y_set |= 1 << (idx - 81);}
+                        'G' => {g_set |= 1 << (idx - 81);}
+                        'B' => {b_set |= 1 << (idx - 81);}
+                        'W' => {w_set |= 1 << (idx - 81);}
+                        'X' | '*' | '.' | '_' => {},
+                        _ => {continue},
                     }
-                },
-                '1'..='9' => {
-                    let digit_index = (ch.to_digit(10).unwrap() - 1) as usize;
-                    b.candidates[digit_index] |= 1 << idx;
-                },
-                _ => {continue},
+                }
+
+            } else {
+                match ch {
+                    '-' | '0' | '*' | '.' | '_' => {
+                        for c in b.candidates.iter_mut() {
+                            *c |= 1 << idx;
+                        }
+                    },
+                    '1'..='9' => {
+                        let digit_index = (ch.to_digit(10).unwrap() - 1) as usize;
+                        b.candidates[digit_index] |= 1 << idx;
+                    },
+                    _ => {continue},
+                }
+    
             }
 
             idx += 1;
+
+            //println!("\"{}\"", ch);
+
+        }
+
+
+        if b.rules.rubiks {
+            b.rules.sets.push(r_set);
+            b.rules.sets.push(o_set);
+            b.rules.sets.push(y_set);
+            b.rules.sets.push(g_set);
+            b.rules.sets.push(b_set);
+            b.rules.sets.push(w_set);
+
+            b.rubiks_sets = Some([r_set, o_set, y_set, g_set, b_set, w_set]);
         }
 
         b
     }
 
 
-    fn short_string(&self) -> String {
+    pub fn short_string(&self) -> String {
         let mut s = String::new();
         for index in 0..81 {
             let v = self.candidates_vec(index);
@@ -406,7 +480,14 @@ impl Board {
                 let set_candidates = candidates & set;
                 if set_candidates.count_ones() == 0 { // if this digit has no candidates in the set
                     // println!("{}s: {}: set_candidates: {}", digit, pretty_print_bitmask(candidates), pretty_print_bitmask(set_candidates));
-                    println!("No {} found in set {}", digit + 1, pretty_print_bitmask(*set));
+                    // println!("No {} found in set {}", digit + 1, pretty_print_bitmask(*set));
+                    return false;
+                }
+
+                let set_solved_digits = self.cell_complete & set_candidates;
+
+                if set_solved_digits.count_ones() > 1 { // if there's more than one "solved" number in here.
+                    // println!("No {} found in set {}", digit + 1, pretty_print_bitmask(*set));
                     return false;
                 }
             }
@@ -422,8 +503,7 @@ impl Board {
         true
     }
 
-    pub fn is_solved(&mut self) -> bool {
-        self.update_cell_complete();
+    pub fn is_solved(&self) -> bool {
         self.cell_complete == 0x000000000001FFFFFFFFFFFFFFFFFFFF
     }
 
@@ -443,29 +523,15 @@ impl Board {
 
     // update ------------------------------------------------------------------------------------------------
 
-
-    pub fn update(&mut self) {
-        self.update_cell_complete();
-        self.update_candidates();
-    }
-
     pub fn update_cell_complete(&mut self) {
-
         for index in 0..81 {
-
             if !self.is_complete(index) {
-            
                 let candidates = self.get_candidates(index);
+                
                 let pop = candidates.count_ones();
-                if pop == 1 {
-                    // dbg!(candidates, index);
-                    self.cell_complete |= (1 << index);
-                    
-                }
+                if pop == 1 {self.cell_complete |= (1 << index);}
             }
-
         }
-
     }
 
     fn update_candidates(&mut self) {
@@ -474,11 +540,10 @@ impl Board {
             let complete = set & self.cell_complete; // 1s where there are complete cells in this set
 
             for digit in 0..9 {
-
                 let cells_containing_digit = complete & self.candidates[digit];
                 let set_contains_digit = cells_containing_digit.count_ones() != 0;
 
-                assert!(cells_containing_digit.count_ones() <= 1);
+                //assert!(cells_containing_digit.count_ones() <= 1);
 
                 let mut eliminate_mask = set * (set_contains_digit as u128);
                 eliminate_mask &= !cells_containing_digit;
@@ -486,6 +551,7 @@ impl Board {
                 let mask = !eliminate_mask;
 
                 self.candidates[digit] &= mask;
+
             }
         }
     }
@@ -496,41 +562,122 @@ impl Board {
 
 
     fn optimize(&mut self) {
-        
+        if self.hidden_singles() {return}
+
     }
 
 
-    pub fn solve(&mut self) -> i64 {
+    fn hidden_singles(&mut self) -> bool {
+        let mut change = false; 
 
-        let mut recursion_count: u64 = 0;
+        let mut masks = [u128::MAX; 9];
+        
+        for set in &self.rules.sets {
+
+            for (d, c) in self.candidates.iter().enumerate() {
+                let set_incomplete_candidates = *c & set & !self.cell_complete;
+
+                if set_incomplete_candidates.count_ones() == 1 { // we have a hidden single
+
+                    let idxs = get_set_indexes(set_incomplete_candidates);
+                    let idx = idxs.first().unwrap();
+                    
+                    for m in masks.iter_mut() {
+                        *m &= !(1 << idx); // remove all the candidates for this index
+                    }
+
+                    masks[d] |= 1 << idx; // add back all other candidates
+
+                    change = true;
+                }
+            }
+        }
+
+        for (d, c) in self.candidates.iter_mut().enumerate() {
+            *c &= masks[d];
+        }
+
+        change    
+    }
+
+
+    pub fn solve(&mut self, recursion_count: &mut u128) -> u128 {
+
+        // println!("{}", self.short_string());
+
+        if *recursion_count >= 10000 { // break out of this if it gets too crazy
+            return 3;
+        }
 
         let mut i = 0; 
-        while !self.is_solved() && i < 10000 {
+
+        while i < 10000 {
 
             let before = self.clone();
 
-            self.update();
+            if !self.is_legal() {
+                //dbg!(0);
+                return 0;
+            } else if self.is_solved() {
+                //dbg!(1);
+                return 1;
+            } 
 
-            println!("{}", self.short_string());
+            self.update_cell_complete();
+            self.update_candidates();
+
+            if !self.is_legal() {
+                //dbg!(0);
+                return 0;
+            } else if self.is_solved() {
+                //dbg!(1);
+                return 1;
+            } 
+
+            // println!("{}", self.short_string());
 
             if before == *self {
 
                 self.optimize();
-                println!("{}", self.short_string());
+                //println!("{}", self.short_string());
 
                 if before == *self {
-
-                    recursion_count += 1;
-
-                    if recursion_count.count_ones() == 1 {
-                        println!("Recursion: x{}", recursion_count)
-                    }
 
                     let (index, count) = self.find_lowest_candidates_unsolved();
                     let candidates = self.candidates_vec(index);
 
-                    for c in candidates {
+                    let mut potential_solution: Board = Board::new(self.rules.clone()); 
+                    let mut solutions_found = 0;
 
+                    for c in &candidates {
+
+                        for count in 0..(candidates.len() as u128 - 1) {
+                            if recursion_count.count_ones() == 1 {
+                                //println!("Recursion: x{}", recursion_count)
+                            }
+                            *recursion_count += 1;
+                        }
+
+                        let mut new_sudoku = self.clone();
+                        new_sudoku.set_cell(*c, index);
+
+                        let result = new_sudoku.solve(recursion_count);
+
+                        solutions_found += result;
+
+                        // dbg!(result, solutions_found);
+
+                        if result == 1 {
+                            potential_solution = new_sudoku;
+                        } else if result > 1 || solutions_found > 1 { // if multiple legal solutions were found then return everything early
+                            return 2;
+                        }
+                    }
+
+                    match solutions_found {
+                        0 => {return 0},
+                        1 => {*self = potential_solution;return 1}
+                        _ => {return 2}
                     }
                     
 
@@ -538,17 +685,12 @@ impl Board {
                 }
             }
 
-            if !self.is_legal() {
-                return 0;
-            } else if self.is_solved() {
-                return 1;
-            }
 
             i += 1;
-
-        return -1;
         
         }
+
+        panic!("Too many iterations")
     }
 
 }

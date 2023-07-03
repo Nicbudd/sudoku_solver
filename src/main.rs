@@ -1,31 +1,85 @@
+use std::{path::Path, time::Instant};
+use clap::Parser;
+
+
+
 mod solver;
-
-use std::path::Path;
-
 use solver::*;
 
 
-fn test_sudoku() -> Board {
-    let rules = Rules {normal_sudoku: true, sets: vec![]};
 
+/// Sudoku solver
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Name of the .sudoku file or the sudoku string itself
+    #[arg(short, long)]
+    sudoku: String,
 
-    let mut b = Board::new(rules);
+    /// Normal sudoku rules
+    #[arg(short, long, default_value_t = true)]
+    normal_rules: bool,
 
-    b.update();
-
-    b
+    /// Rubik's Cube rules
+    #[arg(short, long, default_value_t = false)]
+    rubiks_rules: bool,
 }
 
 fn main() {
 
-    let rules = Rules {normal_sudoku: true, sets: vec![]};
+    let args = Args::parse();
 
-    let mut b = Board::from_file(Path::new("test_sudoku/17.sudoku"), rules).unwrap();
 
-    
 
-    println!("{}", b.solve());
+    let rules = Rules {
+        normal_sudoku: args.normal_rules,
+        rubiks: args.rubiks_rules, 
+        sets: vec![]
+    };
 
-    println!("{}", b);
+    let mut sudoku_string_slice = ['-'; 81];
+
+    for a in 0..81 {
+        for b in 0..81 {
+            for c in 0..81 {
+                sudoku_string_slice = ['-'; 81];
+
+                sudoku_string_slice[a] = '3';
+                sudoku_string_slice[b] = '1';
+                sudoku_string_slice[c] = '3';
+
+
+                let sudoku_string = sudoku_string_slice.iter().collect::<String>() + 
+                        "XXX BOG XXX
+                        XXX YBW XXX
+                        XXX RRW XXX
+                        OGY BWR BGW
+                        ROO GWG RRB
+                        OYY GWG WBB
+                        XXX ROR YYW
+                        XXX BGR YYW
+                        XXX GOO YBO";
+
+                let mut brd = Board::from_string(sudoku_string, rules.clone());
+
+                let count = c + (81*b) + (81*81*a);
+
+
+                let mut recursion_count = 0;
+                let solns = brd.solve(&mut recursion_count);
+
+                if solns == 1 {
+                    println!("{}\n",brd.short_string());
+
+                }
+
+                if count % 100 == 0 {
+                    println!("Attempt {}", count);
+                }
+
+            }
+        }
+    }
+
 }
 
