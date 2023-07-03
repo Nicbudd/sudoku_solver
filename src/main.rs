@@ -20,7 +20,7 @@ fn main() {
 
     let rules = Rules {normal_sudoku: true, sets: vec![]};
 
-    let mut b = Board::from_file(Path::new("test_sudoku/test.sudoku"), rules).unwrap();
+    let mut b = Board::from_file(Path::new("test_sudoku/17.sudoku"), rules).unwrap();
 
     
 

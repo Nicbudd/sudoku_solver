@@ -274,8 +274,6 @@ impl Board {
     pub fn from_file(file_path: &Path, rules: Rules) -> Result<Board> {
         let mut s = fs::read_to_string(file_path)?;
 
-        s = s.replace("\n", "");
-
         let b = Board::from_string(s, rules);
 
         Ok(b)
@@ -288,7 +286,10 @@ impl Board {
 
         b.candidates = [0; 9];
 
-        for (idx, ch) in s.chars().enumerate() {
+
+        let mut idx = 0;
+
+        for ch in s.chars() {
             if idx >= 81 {
                 break;
             }
@@ -296,7 +297,7 @@ impl Board {
             //println!("\"{}\"", ch);
 
             match ch {
-                '-' | '0' => {
+                '-' | '0' | '*' | '.' | '_' => {
                     for c in b.candidates.iter_mut() {
                         *c |= 1 << idx;
                     }
@@ -305,8 +306,10 @@ impl Board {
                     let digit_index = (ch.to_digit(10).unwrap() - 1) as usize;
                     b.candidates[digit_index] |= 1 << idx;
                 },
-                _ => {panic!("Unexpected item in bagging area")},
+                _ => {continue},
             }
+
+            idx += 1;
         }
 
         b
@@ -320,7 +323,7 @@ impl Board {
             let ch = match v.len() {
                 0 => 'X',
                 1 => char::from_digit(*v.first().unwrap() as u32 + 1, 10).unwrap(),
-                _ => '-'
+                _ => '_'
             };
             s.push(ch)
         }
@@ -376,17 +379,25 @@ impl Board {
         return_val
     }
 
+    fn find_lowest_candidates_unsolved(&self) -> (u8, u8) {
+        let mut minimum: (u8, u8) = (10, 200);
+                    
+        for index in 0..81 {
+            let candidates = self.get_candidates(index);
+            let count = candidates.count_ones() as u8;
+            if count > 1 && count < minimum.1 {
+                minimum = (index, count);   
+            }
+        }
+
+        minimum
+    }
+
     fn get_box(&self, row: u8, column: u8) -> (u8, u8) {
         let b1 = row / 3;
         let b2 = column / 3;
         (b1, b2)
     }
-
-
-
-
-
-    // solve ------------------------------------------------------------------------------------------------
 
     pub fn is_legal(&self) -> bool {
         for set in &self.rules.sets {
@@ -415,6 +426,23 @@ impl Board {
         self.update_cell_complete();
         self.cell_complete == 0x000000000001FFFFFFFFFFFFFFFFFFFF
     }
+
+
+    pub fn set_cell(&mut self, digit: usize, index: u8) {
+        for d in 0..9 {
+            if d == digit {
+                self.candidates[d] |= 1 << index; 
+            } else {
+                self.candidates[d] &= !(1 << index);
+            }
+        }
+    }
+
+
+
+
+    // update ------------------------------------------------------------------------------------------------
+
 
     pub fn update(&mut self) {
         self.update_cell_complete();
@@ -463,12 +491,18 @@ impl Board {
     }
 
 
-    fn optimize(&mut self) {
+    // solve ---------------------------------------------------------------------------------------------
 
+
+
+    fn optimize(&mut self) {
+        
     }
 
 
     pub fn solve(&mut self) -> i64 {
+
+        let mut recursion_count: u64 = 0;
 
         let mut i = 0; 
         while !self.is_solved() && i < 10000 {
@@ -479,24 +513,42 @@ impl Board {
 
             println!("{}", self.short_string());
 
-            self.optimize();
-
-            println!("{}", self.short_string());
-
             if before == *self {
-                println!("{}", self);
-                todo!("bifurcation")
+
+                self.optimize();
+                println!("{}", self.short_string());
+
+                if before == *self {
+
+                    recursion_count += 1;
+
+                    if recursion_count.count_ones() == 1 {
+                        println!("Recursion: x{}", recursion_count)
+                    }
+
+                    let (index, count) = self.find_lowest_candidates_unsolved();
+                    let candidates = self.candidates_vec(index);
+
+                    for c in candidates {
+
+                    }
+                    
+
+
+                }
             }
 
             if !self.is_legal() {
                 return 0;
+            } else if self.is_solved() {
+                return 1;
             }
 
             i += 1;
-        }
 
         return -1;
-
+        
+        }
     }
 
 }
