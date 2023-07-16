@@ -557,15 +557,15 @@ impl Board {
     }
 
 
+
+
+
     // solve ---------------------------------------------------------------------------------------------
 
-
-
     fn optimize(&mut self) {
-        if self.hidden_singles() {return}
+        if self.hidden_naked_singles_pairs_triples() {return}
 
     }
-
 
     fn hidden_singles(&mut self) -> bool {
         let mut change = false; 
@@ -601,7 +601,50 @@ impl Board {
     }
 
 
-    pub fn solve(&mut self, recursion_count: &mut u128) -> u128 {
+    fn hidden_naked_singles_pairs_triples(&mut self) -> bool {
+        let mut changed = false;
+
+        let mut masks = [u128::MAX; 9];
+
+        for set in self.rules.sets.clone() {
+            let set_candidates = self.candidates.iter().map(|x| x & set).enumerate();
+            
+            let one_candidates   = set_candidates.clone().filter(|x| x.1.count_ones() == 1);
+            let two_candidates: Vec<(usize, u128)>   = set_candidates.clone().filter(|x| x.1.count_ones() == 2).collect();
+            let three_candidates: Vec<(usize, u128)> = set_candidates.clone().filter(|x| x.1.count_ones() == 3).collect();
+
+            // find hidden or naked singles
+            for c in one_candidates {
+                let eliminate = set ^ c.1;
+                let allow = !eliminate;
+                masks[c.0] &= allow;
+                changed = true;
+                // println!("eliminated {} from {}\n{}", c.0 + 1, pretty_print_bitmask(eliminate), self)
+            }
+
+
+            // find hidden or naked singles
+            for (i, c) in 0..two_candidates.len() {
+                let eliminate = set ^ c.1;
+                let allow = !eliminate;
+                masks[c.0] &= allow;
+                changed = true;
+                // println!("eliminated {} from {}\n{}", c.0 + 1, pretty_print_bitmask(eliminate), self)
+            }
+            
+
+        }
+
+
+        for (d, c) in self.candidates.iter_mut().enumerate() {
+            *c &= masks[d];
+        }
+
+        changed
+    }
+
+
+    pub fn solve(&mut self, recursion_count: &mut u128, stop_if_bifurcate: bool) -> u128 {
 
         // println!("{}", self.short_string());
 
@@ -643,6 +686,10 @@ impl Board {
 
                 if before == *self {
 
+                    if stop_if_bifurcate {
+                        return 2;
+                    }
+
                     let (index, count) = self.find_lowest_candidates_unsolved();
                     let candidates = self.candidates_vec(index);
 
@@ -661,7 +708,7 @@ impl Board {
                         let mut new_sudoku = self.clone();
                         new_sudoku.set_cell(*c, index);
 
-                        let result = new_sudoku.solve(recursion_count);
+                        let result = new_sudoku.solve(recursion_count, stop_if_bifurcate);
 
                         solutions_found += result;
 
