@@ -1,6 +1,29 @@
 use std::{fmt, fs, path::Path};
 use anyhow::Result;
+use crate::Board;
+use crate::Rules;
 
+impl Board for BitmaskBoard {
+    fn completed_cells(&self) -> [u8; 81] {
+        let mut cells = [0; 81];
+        for i in 0..81 {
+            if self.is_complete(i) {
+                for c in 1..=9 {
+                    if self.digit_is_candidate(i, c) {
+                        cells[i as usize] = c as u8;
+                        break;
+                    }
+                } 
+            }
+            
+        }
+        cells
+    }
+
+    fn rules(&self) -> &Rules {
+        &self.rules
+    }
+}
 
 fn pretty_print_bitmask(bits: u128) -> String {
     let rev = bits.reverse_bits() >> (128-81);
@@ -31,22 +54,22 @@ fn get_set_indexes(set: u128) -> Vec<u8> {
 
 
 #[derive(Clone)]
-pub struct Board {
+pub struct BitmaskBoard {
     pub candidates: [u128; 9],
     cell_complete: u128,
     rules: Rules,
     rubiks_sets: Option<[u128; 6]> 
 }
 
-#[derive(Clone)]
-pub struct Rules {
-    pub normal_sudoku: bool,
-    pub rubiks: bool,
-    pub sets: Vec<u128>
-}
+// #[derive(Clone)]
+// pub struct Rules {
+//     pub normal_sudoku: bool,
+//     pub rubiks: bool,
+//     pub sets: Vec<u128>
+// }
 
 
-impl fmt::Display for Board {
+impl fmt::Display for BitmaskBoard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 
         // this should not ultimately exist in the binary, this is just for reference
@@ -159,7 +182,7 @@ const BIG_CHAR: [[&'static str; 3]; 9] = [
 ];
 
 
-impl fmt::Debug for Board {
+impl fmt::Debug for BitmaskBoard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for digit in 0..9 {
             write!(f, "\n{}: {}", digit + 1, format!("{:#083b}", self.candidates[digit]))?;
@@ -170,16 +193,16 @@ impl fmt::Debug for Board {
     }
 }
 
-impl PartialEq for Board {
+impl PartialEq for BitmaskBoard {
     fn eq(&self, other: &Self) -> bool {
         self.candidates == other.candidates
     }
 }
 
-impl Eq for Board {}
+impl Eq for BitmaskBoard {}
 
 
-impl Board {
+impl BitmaskBoard {
 
 
     // used for fmt::Display ------------------------------------------------------------------------------------
@@ -254,9 +277,9 @@ impl Board {
 
     // initialization ------------------------------------------------------------------------------------------------
 
-    pub fn new(rules: Rules) -> Board {
+    pub fn new(rules: Rules) -> BitmaskBoard {
 
-        let mut brd = Board { 
+        let mut brd = BitmaskBoard { 
             candidates: [0x000000000001FFFFFFFFFFFFFFFFFFFF; 9], 
             cell_complete: 0, 
             rules: rules.clone(),
@@ -310,10 +333,10 @@ impl Board {
         brd
     }
 
-    pub fn from_file(file_path: &Path, rules: Rules) -> Result<Board> {
+    pub fn from_file(file_path: &Path, rules: Rules) -> Result<BitmaskBoard> {
         let mut s = fs::read_to_string(file_path)?;
 
-        let mut b = Board::from_string(s, rules);
+        let mut b = BitmaskBoard::from_string(s, rules);
 
         b.update_cell_complete();
 
@@ -321,9 +344,9 @@ impl Board {
 
     }
 
-    pub fn from_string(s: String, rules: Rules) -> Board {
+    pub fn from_string(s: String, rules: Rules) -> BitmaskBoard {
 
-        let mut b = Board::new(rules);
+        let mut b = BitmaskBoard::new(rules);
 
         b.candidates = [0; 9];
 
@@ -646,7 +669,7 @@ impl Board {
                     let (index, count) = self.find_lowest_candidates_unsolved();
                     let candidates = self.candidates_vec(index);
 
-                    let mut potential_solution: Board = Board::new(self.rules.clone()); 
+                    let mut potential_solution: BitmaskBoard = BitmaskBoard::new(self.rules.clone()); 
                     let mut solutions_found = 0;
 
                     for c in &candidates {
