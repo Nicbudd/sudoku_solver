@@ -27,6 +27,10 @@ struct Args {
     /// Rubik's Cube rules
     #[arg(short, long, default_value_t = false)]
     rubiks_rules: bool,
+
+    /// Stop the solve if we need to bifurcate
+    #[arg(long, default_value_t = false)]
+    stop_if_bifurcate: bool,
 }
 
 fn main() {
