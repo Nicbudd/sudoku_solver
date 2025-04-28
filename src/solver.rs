@@ -623,14 +623,14 @@ impl Board {
             }
 
 
-            // find hidden or naked singles
-            for (i, c) in 0..two_candidates.len() {
-                let eliminate = set ^ c.1;
-                let allow = !eliminate;
-                masks[c.0] &= allow;
-                changed = true;
-                // println!("eliminated {} from {}\n{}", c.0 + 1, pretty_print_bitmask(eliminate), self)
-            }
+            // // find hidden or naked singles
+            // for (i, c) in 0..two_candidates.len() {
+            //     let eliminate = set ^ c.1;
+            //     let allow = !eliminate;
+            //     masks[c.0] &= allow;
+            //     changed = true;
+            //     // println!("eliminated {} from {}\n{}", c.0 + 1, pretty_print_bitmask(eliminate), self)
+            // }
             
 
         }
